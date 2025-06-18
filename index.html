@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pl" x-data="app()">
+<head>
+  <meta charset="UTF-8">
+  <title>Zagadnienie Pośrednika</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="script.js"></script>
+  <script src="https://unpkg.com/alpinejs" defer></script>
+</head>
+<body class="p-6 bg-gray-100 text-gray-800">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <h1 class="text-2xl font-bold">Zagadnienie Pośrednika</h1>
+
+    <div class="bg-white p-4 rounded shadow space-y-2">
+      <label class="block">Liczba dostawców:
+        <input type="number" min="1" class="border rounded p-1 w-20" x-model.number="suppliers">
+      </label>
+      <label class="block">Liczba odbiorców:
+        <input type="number" min="1" class="border rounded p-1 w-20" x-model.number="receivers">
+      </label>
+      <button class="mt-2 px-4 py-1 bg-blue-500 text-white rounded" @click="generateTables()">Generuj tabele</button>
+    </div>
+    <div class="flex space-x-2 mt-2">
+      <button class="px-4 py-1 bg-purple-500 text-white rounded disabled:opacity-50"
+      @click="canExport && exportData()" 
+      :disabled="!canExport">
+Eksportuj dane
+</button>
+
+    
+      <label class="px-4 py-1 bg-yellow-500 text-white rounded cursor-pointer">
+        Importuj dane
+        <input type="file" accept=".json" class="hidden" @change="importData">
+      </label>
+    </div>
+    
+
+    <!-- Wyświetlanie komunikatów o błędach -->
+    <div x-show="errorMessage" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+      <span x-text="errorMessage"></span>
+    </div>
+
+    <template x-if="showTables">
+      <div class="space-y-6">
+        <!-- Sekcja danych transportowych z białym tłem -->
+        <div class="bg-white p-4 rounded shadow space-y-4">
+          <h2 class="text-xl font-semibold">Dane transportowe</h2>
+          <div class="overflow-auto">
+            <table class="border border-collapse">
+              <thead>
+                <tr>
+                  <th class="border p-1">Dost/Odb</th>
+                  <template x-for="j in receivers">
+                    <th class="border p-1" x-text="'Odbiorca ' + j"></th>
+                  </template>
+                  <th class="border p-1">Podaż</th>
+                  <th class="border p-1">Cena zakupu</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="i in suppliers">
+                  <tr>
+                    <td class="border p-1" x-text="'Dostawca ' + i"></td>
+                    <template x-for="j in receivers">
+                      <td class="border">
+                        <input type="number" min="0" class="w-20 p-1" x-model.number="costs[i-1][j-1]">
+                      </td>
+                    </template>
+                    <td class="border">
+                      <input type="number" min="0" class="w-20 p-1" x-model.number="supplierSupply[i-1]">
+                    </td>
+                    <td class="border">
+                      <input type="number" min="0" class="w-20 p-1" x-model.number="purchasePrices[i-1]">
+                    </td>
+                  </tr>
+                </template>
+                <!-- Wiersz Popyt -->
+                <tr>
+                  <td class="border p-1 font-semibold">Popyt</td>
+                  <template x-for="j in receivers">
+                    <td class="border">
+                      <input type="number" min="0" class="w-20 p-1" x-model.number="receiverDemand[j-1]">
+                    </td>
+                  </template>
+                  <td class="border bg-gray-100"></td>
+                  <td class="border bg-gray-100"></td>
+                </tr>
+                <!-- Wiersz Cena sprzedaży -->
+                <tr>
+                  <td class="border p-1 font-semibold">Cena sprzedaży</td>
+                  <template x-for="j in receivers">
+                    <td class="border">
+                      <input type="number" min="0" class="w-20 p-1" x-model.number="sellingPrices[j-1]">
+                    </td>
+                  </template>
+                  <td class="border bg-gray-100"></td>
+                  <td class="border bg-gray-100"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button class="px-4 py-1 bg-green-600 text-white rounded" @click="calculate()">Oblicz zyski</button>
+        </div>
+
+        <!-- Sekcja wyników -->
+        <div x-show="resultsVisible" class="bg-white p-4 rounded shadow space-y-4">
+          <h2 class="text-xl font-semibold">Wyniki</h2>
+
+          <div>
+            <h3 class="font-bold">Tabela zysków jednostkowych:</h3>
+            <table class="table-auto border">
+              <tr>
+                <template x-for="j in receivers">
+                  <th class="border p-1" x-text="'Odbiorca ' + j"></th>
+                </template>
+              </tr>
+              <template x-for="row in unitProfits">
+                <tr>
+                  <template x-for="cell in row">
+                    <td class="border p-1 text-center" x-text="cell"></td>
+                  </template>
+                </tr>
+              </template>
+            </table>
+          </div>
+
+          <div>
+            <h3 class="font-bold mt-4">Tabela optymalnych przewozów:</h3>
+            <table class="table-auto border">
+              <thead>
+                <tr>
+                  <th class="border p-1">Dost/Odb</th>
+                  <template x-for="j in receivers">
+                    <th class="border p-1" x-text="'Odbiorca ' + j"></th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, i) in transportPlan">
+                  <tr>
+                    <td class="border p-1" x-text="'Dostawca ' + (i + 1)"></td>
+                    <template x-for="amount in row">
+                      <td class="border p-1 text-center" x-text="amount"></td>
+                    </template>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          
+
+          <div>
+            <p><strong>Koszt całkowity:</strong> <span x-text="totalCost"></span></p>
+            <p><strong>Przychód całkowity:</strong> <span x-text="totalRevenue"></span></p>
+            <p><strong>Zysk pośrednika:</strong> <span x-text="profit"></span></p>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</body>
+</html>
